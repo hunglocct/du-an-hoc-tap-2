@@ -622,7 +622,7 @@
             box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), 5px 5px 15px rgba(0, 0, 0, 0.6);
             transition: top 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.5s;
             left: 50%;
-            top: 0;
+            top: 20px;
             transform: translateX(-50%) translate(0, 0);
         }
 
@@ -785,7 +785,7 @@
         .tx-container {
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            background: linear-gradient(135deg, #800000 0%, #3a0000 50%, #1a0000 100%);
             display: flex;
             flex-direction: column;
             padding: 20px;
@@ -2400,6 +2400,9 @@
             <div class="modal-body">
                 <div class="xd-container">
                     <div class="status-bar" id="xd-status">Mời đặt cược...</div>
+                    <div id="xd-timer"
+                        style="font-size: 30px; font-weight: bold; color: gold; margin: 10px 0; text-shadow: 0 0 10px red;">
+                        20</div>
 
                     <div class="plate-area">
                         <div class="plate-disc">
@@ -2414,7 +2417,7 @@
                     </div>
 
                     <div class="game-controls">
-                        <button class="btn btn-action" id="btn-xd-shake" onclick="gameXD.shake()">XỐC (5s)</button>
+                        <button class="btn btn-action" id="btn-xd-shake">ĐANG CƯỢC...</button>
                     </div>
 
                     <div class="bet-amount-selector">
@@ -2472,6 +2475,9 @@
                             <div class="tx-round-info">
                                 <div class="tx-round-number">1</div>
                             </div>
+                            <div id="tx-timer"
+                                style="font-size: 30px; font-weight: bold; color: gold; margin: 10px 0; text-shadow: 0 0 10px red;">
+                                20</div>
                             <div class="dice-shaker">
                                 <div class="tx-plate-area">
                                     <div class="tx-plate-disc">
@@ -2566,8 +2572,7 @@
                     <!-- Các nút hành động -->
                     <div class="tx-action-buttons">
                         <button class="tx-action-btn tx-allin" onclick="gameTX.allIn()">ALL-IN</button>
-                        <button class="tx-action-btn tx-bet-btn active" id="btn-tx-shake" onclick="gameTX.shake()">ĐẶT
-                            CƯỢC</button>
+                        <button class="tx-action-btn tx-bet-btn active" id="btn-tx-shake">ĐANG CƯỢC...</button>
                         <button class="tx-action-btn tx-cancel" onclick="gameTX.cancelBet()">HỦY</button>
                     </div>
 
@@ -2970,10 +2975,14 @@
                 this.initRanking(); // Cập nhật lại bảng xếp hạng
             },
             openGame: function (id, slotName) {
-                if (id === 'xocdia') document.getElementById('modal-xocdia').classList.add('active');
+                if (id === 'xocdia') {
+                    document.getElementById('modal-xocdia').classList.add('active');
+                    gameXD.reset();
+                }
                 else if (id === 'taixiu') {
                     document.getElementById('modal-taixiu').classList.add('active');
                     gameTX.init();
+                    gameTX.reset();
                 }
                 else if (id === 'baucua') {
                     document.getElementById('modal-baucua').classList.add('active');
@@ -3281,6 +3290,8 @@
             bet: null,
             isRolling: false,
             amount: 1000000,
+            timeLeft: 20,
+            timerInterval: null,
             setAmount: function (amt) {
                 this.amount = amt;
                 document.querySelectorAll('#modal-xocdia .amount-btn').forEach(btn => {
@@ -3296,32 +3307,60 @@
                 document.getElementById('xd-bet-amount').innerText = `Số tiền cược: ${amt.toLocaleString('vi-VN')}`;
             },
             select: function (side) {
-                if (this.isRolling) return;
+                // Allow betting only if timer is running and > 3s (optional, but let's allow until 0)
+                if (this.isRolling && this.timeLeft <= 0) return;
+
                 this.bet = side;
                 document.querySelectorAll('#modal-xocdia .bet-option').forEach(e => e.classList.remove('active'));
                 document.getElementById('xd-' + side).classList.add('active');
                 document.getElementById('xd-status').innerText = `Đã chọn: ${side.toUpperCase()} - Cược ${(this.amount / 1000000).toFixed(this.amount >= 1000000 ? 0 : 1)}M`;
                 document.getElementById('xd-status').style.color = 'gold';
             },
+            startTimer: function () {
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.timeLeft = 20;
+
+                const timerEl = document.getElementById('xd-timer');
+                const btn = document.getElementById('btn-xd-shake');
+                const status = document.getElementById('xd-status');
+
+                if (timerEl) timerEl.innerText = this.timeLeft;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerText = "ĐANG CƯỢC...";
+                    btn.onclick = null;
+                }
+                status.innerText = "Mời đặt cược...";
+                status.style.color = "#fff";
+
+                this.timerInterval = setInterval(() => {
+                    this.timeLeft--;
+                    if (timerEl) timerEl.innerText = this.timeLeft;
+
+                    if (this.timeLeft <= 0) {
+                        clearInterval(this.timerInterval);
+                        this.shake();
+                    }
+                }, 1000);
+            },
             shake: function () {
-                if (!this.bet) { alert("Vui lòng chọn CHẴN hoặc LẺ"); return; }
-                if (this.isRolling) return;
-                this.isRolling = true;
+                if (this.isRolling && this.timeLeft <= 0) return; // Prevent double shake
 
                 const bowl = document.getElementById('xd-bowl');
                 const btn = document.getElementById('btn-xd-shake');
                 const status = document.getElementById('xd-status');
+
+                this.isRolling = true; // Block new bets
+
                 // reset lid state
                 bowl.classList.remove('open', 'shaking');
                 bowl.style.transform = 'translateX(-50%) translate(0, 0)';
-                bowl.style.top = '0';
+                bowl.style.top = '20px';
                 this.pendingResult = null;
                 if (bowl._dragCleanup) { bowl._dragCleanup(); bowl._dragCleanup = null; }
                 bowl.style.pointerEvents = 'none';
 
-                bowl.classList.remove('open');
-                btn.disabled = true;
-                btn.innerText = "ĐANG XỐC...";
+                if (btn) btn.innerText = "ĐANG XỐC...";
                 status.innerText = "Đang lắc...";
 
                 // Animation shake
@@ -3344,65 +3383,116 @@
 
                     setTimeout(() => {
                         bowl.classList.remove('shaking');
-                        status.innerText = "Kéo đĩa để mở";
-                        this.isRolling = false;
-                        btn.disabled = false;
-                        btn.innerText = "XỐC LẠI";
+                        status.innerText = "Kéo đĩa hoặc bấm MỞ BÁT";
+                        status.style.color = "#00e676";
+
+                        // Wait for user to open
+                        // this.isRolling = false; // Keep it true so no bets can be placed, but allow Open
+
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerText = "MỞ BÁT";
+                            btn.onclick = () => this.userOpen();
+                        }
+
                         this.pendingResult = { result };
                         bowl.style.pointerEvents = 'auto';
                         app.enableLidDrag('xd-bowl', () => this.reveal());
+
+                        // Auto open after 3 seconds
+                        setTimeout(() => {
+                            if (this.pendingResult) this.userOpen();
+                        }, 3000);
                     }, 2000);
                 }, 500);
             },
+            userOpen: function () {
+                const bowl = document.getElementById('xd-bowl');
+                if (bowl.classList.contains('open')) return;
+
+                // Animate open
+                bowl.style.transition = 'all 0.5s ease';
+                bowl.classList.add('open');
+                bowl.style.transform = 'translateX(-50%) translate(0, -320px)';
+
+                this.reveal();
+            },
             pendingResult: null,
             reveal: function () {
-                if (!this.pendingResult || !this.bet) return;
+                if (!this.pendingResult) return; // Allow reveal without bet, just show result
                 const { result } = this.pendingResult;
                 const status = document.getElementById('xd-status');
-                const win = (result === this.bet);
-                app.stats.total++;
-                if (win) {
-                    app.balance += this.amount;
-                    app.stats.wins++;
-                    app.stats.totalWin += this.amount;
-                    status.innerText = `VỀ ${result.toUpperCase()} - BẠN THẮNG +${this.amount.toLocaleString('vi-VN')}`;
-                    status.style.color = '#00e676';
-                    app.playSound('win');
+
+                let win = false;
+                if (this.bet) {
+                    win = (result === this.bet);
+                    app.stats.total++;
+                    if (win) {
+                        app.balance += this.amount;
+                        app.stats.wins++;
+                        app.stats.totalWin += this.amount;
+                        status.innerText = `VỀ ${result.toUpperCase()} - BẠN THẮNG +${this.amount.toLocaleString('vi-VN')}`;
+                        status.style.color = '#00e676';
+                        app.playSound('win');
+                    } else {
+                        app.balance -= this.amount;
+                        app.stats.losses++;
+                        app.stats.totalLose += this.amount;
+                        status.innerText = `VỀ ${result.toUpperCase()} - BẠN THUA -${this.amount.toLocaleString('vi-VN')}`;
+                        status.style.color = '#d32f2f';
+                        app.playSound('lose');
+                    }
+                    app.updateBalanceUI();
+                    app.addTransaction('Xóc Đĩa', this.bet.toUpperCase(), this.amount, win);
                 } else {
-                    app.balance -= this.amount;
-                    app.stats.losses++;
-                    app.stats.totalLose += this.amount;
-                    status.innerText = `VỀ ${result.toUpperCase()} - BẠN THUA -${this.amount.toLocaleString('vi-VN')}`;
-                    status.style.color = '#d32f2f';
-                    app.playSound('lose');
+                    status.innerText = `KẾT QUẢ: ${result.toUpperCase()}`;
+                    status.style.color = '#fff';
                 }
-                app.updateBalanceUI();
-                app.addTransaction('Xóc Đĩa', this.bet.toUpperCase(), this.amount, win);
+
                 this.pendingResult = null;
+
+                // Auto reset after 5 seconds?
+                setTimeout(() => {
+                    this.reset();
+                }, 5000);
             },
             reset: function () {
+                clearInterval(this.timerInterval);
                 this.bet = null;
                 this.isRolling = false;
                 this.amount = 1000000;
                 this.pendingResult = null;
-                document.getElementById('xd-bowl').classList.remove('open', 'shaking');
+
+                const bowl = document.getElementById('xd-bowl');
+                if (bowl) {
+                    bowl.style.transition = 'none'; // Instant reset
+                    bowl.classList.remove('open', 'shaking');
+                    bowl.style.transform = 'translateX(-50%) translate(0, 0)';
+                    bowl.style.top = '20px';
+                    // Re-enable transition after small delay
+                    setTimeout(() => bowl.style.transition = '', 50);
+                }
+
                 document.querySelectorAll('#modal-xocdia .bet-option').forEach(e => e.classList.remove('active'));
                 document.querySelectorAll('#modal-xocdia .amount-btn').forEach((btn, idx) => {
                     btn.classList.remove('active');
                     if (idx === 2) btn.classList.add('active');
                 });
-                document.getElementById('xd-status').innerText = "Mời đặt cược...";
-                document.getElementById('xd-status').style.color = "#fff";
+
                 document.getElementById('xd-bet-amount').innerText = "Số tiền cược: 1,000,000";
+
+                this.startTimer();
             }
         };
 
         // --- GAME TÀI XỈU ---
         const gameTX = {
             bet: null,
-            pendingBetAmount: 0, // Số tiền đang chờ đặt cược
+            pendingBetAmount: 0,
             isRolling: false,
-            amount: 100000, // Số tiền được chọn từ các nút
+            amount: 100000,
+            timerInterval: null,
+            timeLeft: 20,
             rotations: { 1: [0, 0], 2: [-90, 0], 3: [0, -90], 4: [0, 90], 5: [90, 0], 6: [0, 180] },
             init: function () {
                 this.updatePlayers();
@@ -3415,6 +3505,7 @@
                         this.updateTotals();
                     }
                 }, 3000);
+                this.reset(); // Starts timer immediately
             },
             updateGameId: function () {
                 document.getElementById('tx-game-id').innerText = Math.floor(Math.random() * 900000 + 100000);
@@ -3447,21 +3538,22 @@
                     if (btnAmount === amt) btn.classList.add('active');
                 });
                 // Nếu đã chọn cửa, cập nhật số tiền sẽ đặt
-                if (this.bet) {
+                if (this.bet && (!this.isRolling || this.timeLeft > 0)) {
                     this.pendingBetAmount = amt;
                     this.updatePendingBet();
-                    document.getElementById('tx-status').innerText = `Đã chọn ${this.bet.toUpperCase()} - Sẽ cược ${amt.toLocaleString('vi-VN')}`;
+                    document.getElementById('tx-status').innerText = `Đã chọn ${this.bet.toUpperCase()} - Cược ${amt.toLocaleString('vi-VN')}`;
                 }
             },
             select: function (side) {
-                if (this.isRolling) return;
+                if (this.isRolling && this.timeLeft <= 0) return; // Prevent betting if rolling or timer is up
+
                 this.bet = side;
                 this.pendingBetAmount = this.amount; // Số tiền sẽ đặt = số tiền đã chọn
                 document.getElementById('btn-tai').classList.remove('active');
                 document.getElementById('btn-xiu').classList.remove('active');
                 document.getElementById('btn-' + side).classList.add('active');
                 this.updatePendingBet();
-                document.getElementById('tx-status').innerText = `Đã chọn ${side.toUpperCase()} - Sẽ cược ${this.amount.toLocaleString('vi-VN')}`;
+                document.getElementById('tx-status').innerText = `Đã chọn ${side.toUpperCase()} - Cược ${this.amount.toLocaleString('vi-VN')}`;
             },
             updatePendingBet: function () {
                 // Hiển thị số tiền sẽ đặt (chưa trừ tiền)
@@ -3474,36 +3566,39 @@
                 }
             },
             shake: function () {
-                // Đây là hàm ĐẶT CƯỢC - chỉ khi nhấn nút này mới trừ tiền và lắc
-                if (!this.bet) {
-                    alert("Vui lòng chọn TÀI hoặc XỈU trước!");
-                    return;
-                }
-                if (this.isRolling) return;
-                if (app.balance < this.pendingBetAmount) {
-                    alert('Không đủ tiền để đặt cược!');
-                    return;
-                }
-                if (this.pendingBetAmount <= 0) {
-                    alert('Vui lòng chọn số tiền cược!');
-                    return;
-                }
+                // This function is now triggered automatically by the timer
+                if (this.isRolling) return; // Prevent double shake
 
                 this.isRolling = true;
-                // Trừ tiền khi nhấn ĐẶT CƯỢC
-                app.balance -= this.pendingBetAmount;
-                app.updateBalanceUI();
-                // Cập nhật tổng tiền cược (thêm tiền của người chơi vào)
-                this.updateTotalsWithBet();
+
+                // Deduct balance automatically if a bet was placed
+                if (this.bet && this.pendingBetAmount > 0) {
+                    if (app.balance >= this.pendingBetAmount) {
+                        app.balance -= this.pendingBetAmount;
+                        app.updateBalanceUI();
+                        // Update total bets on the table
+                        this.updateTotalsWithBet();
+                    } else {
+                        // Not enough balance, cancel bet
+                        this.bet = null;
+                        this.pendingBetAmount = 0;
+                        alert('Không đủ tiền, cược đã bị hủy!');
+                        document.getElementById('tx-status').innerText = "Cược bị hủy do không đủ tiền.";
+                        document.getElementById('tx-status').style.color = "#d32f2f";
+                    }
+                }
 
                 const btn = document.getElementById('btn-tx-shake');
                 const bowl = document.getElementById('tx-bowl');
                 const status = document.getElementById('tx-status');
                 const resultBox = document.getElementById('tx-result-box');
 
-                btn.disabled = true;
-                btn.innerText = "ĐANG LẮC...";
-                resultBox.style.display = 'none';
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerText = "ĐANG LẮC...";
+                    btn.onclick = null; // Disable click during shake
+                }
+                if (resultBox) resultBox.style.display = 'none';
 
                 // Đóng đĩa che phủ và reset trạng thái
                 bowl.classList.remove('open', 'shaking');
@@ -3563,30 +3658,50 @@
 
                 setTimeout(() => {
                     bowl.classList.remove('shaking');
-                    status.innerText = "Kéo đĩa để mở";
-                    this.pendingResult = { res, total };
-                    this.isRolling = false;
-                    btn.disabled = false;
-                    btn.innerText = "ĐẶT CƯỢC";
+                    status.innerText = "Kéo đĩa hoặc bấm MỞ BÁT";
+                    status.style.color = "#00e676";
+
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = "MỞ BÁT";
+                        btn.onclick = () => this.userOpen();
+                    }
+
+                    this.pendingResult = { result: res, total: total };
                     bowl.style.pointerEvents = 'auto';
                     app.enableLidDrag('tx-bowl', () => this.reveal());
+
+                    // Auto open after 3 seconds
+                    setTimeout(() => {
+                        if (this.pendingResult) this.userOpen();
+                    }, 3000);
                 }, 2000);
             },
+            userOpen: function () {
+                const bowl = document.getElementById('tx-bowl');
+                if (bowl.classList.contains('open')) return;
+
+                // Animate open
+                bowl.style.transition = 'all 0.5s ease';
+                bowl.classList.add('open');
+                bowl.style.transform = 'translateX(-50%) translate(0, -320px)'; // Force open position
+
+                this.reveal();
+            },
             reveal: function () {
-                if (!this.pendingResult || !this.bet) return;
-                const { res, total } = this.pendingResult;
+                if (!this.pendingResult) return;
+                const { result, total } = this.pendingResult;
                 const bowl = document.getElementById('tx-bowl');
                 const status = document.getElementById('tx-status');
                 const resultBox = document.getElementById('tx-result-box');
                 bowl.classList.add('open');
 
-                const win = (res === this.bet);
-                const betAmount = this.pendingBetAmount; // Số tiền đã đặt
+                const win = (result === this.bet);
+                const betAmount = this.pendingBetAmount;
                 app.stats.total++;
 
                 if (win) {
-                    // Thắng: nhận lại tiền cược + tiền thắng (tỷ lệ 1:1)
-                    const winAmount = betAmount * 2; // Nhận lại tiền cược + tiền thắng
+                    const winAmount = betAmount * 2;
                     app.balance += winAmount;
                     app.stats.wins++;
                     app.stats.totalWin += betAmount;
@@ -3599,7 +3714,6 @@
                     document.getElementById('tx-result-text').style.color = 'var(--green-win)';
                     app.playSound('win');
                 } else {
-                    // Thua: đã trừ tiền rồi, chỉ cập nhật stats
                     app.stats.losses++;
                     app.stats.totalLose += betAmount;
                     status.innerText = `TỔNG: ${total} - BẠN THUA -${betAmount.toLocaleString('vi-VN')}`;
@@ -3617,23 +3731,13 @@
 
                 // Add dot history
                 const dot = document.createElement('div');
-                dot.className = `dot ${res === 'tai' ? 't' : 'x'}`;
+                dot.className = `dot ${result === 'tai' ? 't' : 'x'}`;
                 document.getElementById('tx-history').appendChild(dot);
 
                 // Reset để chơi tiếp
                 setTimeout(() => {
-                    this.bet = null;
-                    this.pendingResult = null;
-                    this.pendingBetAmount = 0;
-                    document.getElementById('btn-tai').classList.remove('active');
-                    document.getElementById('btn-xiu').classList.remove('active');
-                    document.getElementById('tx-tai-user-bet').innerText = '0';
-                    document.getElementById('tx-xiu-user-bet').innerText = '0';
-                    document.getElementById('tx-status').innerText = "Mời đặt cược";
-                    document.getElementById('tx-status').style.color = "#fff";
-                    resultBox.style.display = 'none';
-                    this.updateGameId();
-                }, 3000);
+                    this.reset();
+                }, 5000);
             },
             updateTotalsWithBet: function () {
                 // Cập nhật tổng tiền cược sau khi người chơi đặt cược
@@ -3681,6 +3785,7 @@
                 document.getElementById('tx-result-box').style.display = 'none';
             },
             reset: function () {
+                clearInterval(this.timerInterval);
                 this.bet = null;
                 this.isRolling = false;
                 this.pendingBetAmount = 0;
@@ -3689,7 +3794,16 @@
                 document.getElementById('btn-xiu').classList.remove('active');
                 document.getElementById('tx-status').innerText = "Mời đặt cược";
                 document.getElementById('tx-status').style.color = "#fff";
-                document.getElementById('tx-bowl').classList.remove('open', 'shaking');
+
+                const bowl = document.getElementById('tx-bowl');
+                if (bowl) {
+                    bowl.style.transition = 'none';
+                    bowl.classList.remove('open', 'shaking');
+                    bowl.style.transform = 'translateX(-50%) translate(0, 0)';
+                    bowl.style.top = '0';
+                    setTimeout(() => bowl.style.transition = '', 50);
+                }
+
                 document.getElementById('tx-result-box').style.display = 'none';
                 document.getElementById('tx-tai-user-bet').innerText = '0';
                 document.getElementById('tx-xiu-user-bet').innerText = '0';
@@ -3703,13 +3817,39 @@
                     { left: 35, top: 60 },
                     { left: 65, top: 60 }
                 ];
-                for (let i = 1; i <= 3; i++) {
+                [1, 2, 3].forEach((i, idx) => {
                     const el = document.getElementById('d' + i);
-                    el.style.left = positions[i - 1].left + '%';
-                    el.style.top = positions[i - 1].top + '%';
-                    el.style.transform = `translate(-50%, -50%) rotateX(0deg) rotateY(0deg)`;
+                    const pos = positions[idx];
+                    el.style.left = pos.left + '%';
+                    el.style.top = pos.top + '%';
+                    el.style.transform = 'translate(-50%, -50%)';
+                });
+
+                this.startTimer();
+            },
+            startTimer: function () {
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.timeLeft = 20;
+
+                const timerEl = document.getElementById('tx-timer');
+                const btn = document.getElementById('btn-tx-shake');
+
+                if (timerEl) timerEl.innerText = this.timeLeft;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerText = "ĐANG CƯỢC...";
+                    btn.onclick = null;
                 }
-                this.init();
+
+                this.timerInterval = setInterval(() => {
+                    this.timeLeft--;
+                    if (timerEl) timerEl.innerText = this.timeLeft;
+
+                    if (this.timeLeft <= 0) {
+                        clearInterval(this.timerInterval);
+                        this.shake();
+                    }
+                }, 1000);
             }
         };
 
